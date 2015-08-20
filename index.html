@@ -10,9 +10,13 @@
 <!-- js libraries -->
 <script type="text/javascript" src="js/libs/jquery.min.js"></script>
 <script type="text/javascript" src="js/libs/device.min.js"></script>
-<script type="text/javascript" src="js/libs/Three.js"></script>
-<script type="text/javascript" src="js/libs/Tween.js"></script>
+<script type="text/javascript" src="js/libs/three.min.js"></script>
+<script type="text/javascript" src="js/libs/tween.min.js"></script>
 <script type="text/javascript" src="js/libs/stats.min.js"></script>
+
+<script type="text/javascript" src="js/data/data1.js"></script>
+<script type="text/javascript" src="js/data/data2.js"></script>
+<script type="text/javascript" src="js/data/StarPosition.js"></script>
 
 <script type="text/javascript" src="js/main.js"></script>
 
@@ -20,11 +24,10 @@
 
 <body>
 <!-- elements ------------------------------------------------------------------- -->
+
 <!-- main frame -->
 <div id="main_frame"></div>
-
 <div id="debug_text"></div>
-
 
 <!-- shaders ------------------------------------------------------------------- -->
 <!-- particleShader -->
@@ -33,6 +36,7 @@
 uniform   float amplitude;
 uniform   float direction;
 attribute float size;
+
 attribute vec3  customColor;
 attribute vec3  custompositiona;
 attribute vec3  custompositionb;
@@ -43,7 +47,7 @@ varying float fAlpha;
 
 void main() {
 
-	vColor = customColor;
+	//vColor = customColor;
 
 	//vec3 pos = position; 
 
@@ -64,10 +68,10 @@ void main() {
 	vec4 mvPosition = modelViewMatrix * vec4( morphed, 1.0 );
 
 	//fAlpha = (mvPosition.z+6000.0)/6000.0;
-	fAlpha = 1.0;
+	//fAlpha = 1.0;
 
 	//gl_PointSize = min(150.0, size * ( 150.0 / length( mvPosition.xyz ) ) );
-	gl_PointSize = min(150.0, 2.0 * ( 150.0 / length( mvPosition.xyz ) ) );
+	gl_PointSize = min(150.0, 5.0 * ( 150.0 / length( mvPosition.xyz ) ) );
 	//gl_PointSize = 10.0;
 
 	gl_Position = projectionMatrix * mvPosition;
@@ -86,8 +90,8 @@ void main() {
 
 	vec4 outColor = texture2D( texture, gl_PointCoord );
 	if ( outColor.a < 0.5 ) discard; // alpha be gone
-
-	//gl_FragColor = outColor * vec4( color * vColor.xyz, fAlpha );
+	//outColor = vec4(1,gl_PointCoord.x,0,1);
+	gl_FragColor = outColor * vec4( color * vColor.xyz, fAlpha );
 	gl_FragColor = outColor;
 }
 </script> <!-- starParticleFragmentShader -->
@@ -155,6 +159,9 @@ $(function(){
 	var _world;
 	var _bgSphere;
 	var _starParticle;
+	var _zodiacStarParticle;
+	
+	var _zoadicGraphicsPlanes = [];
 	
 	// ----------------------------------------------
 	// functions
@@ -209,6 +216,7 @@ $(function(){
 		_camera.position.set(0.0, 0.0, -2.5);
 		// カメラの向きを指定
 		_camera.lookAt ({x:0, y:0, z:0});
+		_scene.add (_camera);
 	}
 	
 	function init_object () {
@@ -222,13 +230,20 @@ $(function(){
 		var starParticleRadiusMin = 20.0;
 		var starParticleGeo = new THREE.Geometry ();
 		
+		/*
 		for ( var i = 0; i < 3000; ++i ) {
 			//var vector = getRandomPointOnParticles(starParticleRadiusMin + Math.random() * starParticleRadiusMax - starParticleRadiusMin);
 			var vector = randomSpherePoint (starParticleRadiusMin + Math.random() * (starParticleRadiusMax - starParticleRadiusMin));
 			starParticleGeo.vertices.push( vector );
 		}
+		*/
 		
-		var starParticleTex = THREE.ImageUtils.loadTexture ("./resources/images/particle3.png");
+		for ( var i = 0; i < Math.floor(data1.length/3); ++i ) {
+			var vector = randomSpherePoint (starParticleRadiusMin + Math.random() * (starParticleRadiusMax - starParticleRadiusMin));
+			starParticleGeo.vertices.push( vector );
+		}
+		
+		var starParticleTex = THREE.ImageUtils.loadTexture ("./resources/images/particle.png");
 		
 		// particles
 		attributes = {
@@ -241,7 +256,7 @@ $(function(){
 		uniforms = {
 			amplitude: { type: "f", value: 0.0 },
 			color:     { type: "c", value: new THREE.Color( 0xffffff ) },
-			texture:   { type: "t", value: 0, texture: starParticleTex },
+			texture:   { type: "t", value: starParticleTex },
 			time:	   { type: "f", value: 1.0 },
 			direction: { type: "f", value: 1.0 },
 		};
@@ -257,7 +272,7 @@ $(function(){
 			transparent:	true,	
 		});
 		
-		var starParticleMat = new THREE.ParticleBasicMaterial({
+		var starParticleMat = new THREE.PointCloudMaterial ({
 			size: 2,
 			color: 0xFFFFFF,
 			blending: THREE.AdditiveBlending,
@@ -266,26 +281,131 @@ $(function(){
 			map: starParticleTex		
 		});
 		
-		_starParticle = new THREE.ParticleSystem (starParticleGeo, starParticleShaderMat);
+		_starParticle = new THREE.PointCloud (starParticleGeo, starParticleShaderMat);
+		
+		var vertices     = _starParticle.geometry.vertices;
+		var values_size  = attributes.size.value;
+		var values_color = attributes.customColor.value;
+		
+		baseSize = [];
+		
+		for (var v = 0; v < vertices.length; v++) {
+			baseSize [v] = 40 + Math.random () * 360;
+			
+			values_size [v]  = baseSize [v];
+			values_color [v] = new THREE.Color (0xFFFFFF);
+			
+			values_color[ v ].setHSL( 0.55, 0.75 * ( v / vertices.length ), 1.0 );
+		}
+		
+		var values_positiona = attributes.custompositiona.value;
+		var values_positionb = attributes.custompositionb.value;
+		
+		for (var v = 0; v < vertices.length; v++) {
+			var index = v * 3;
+			
+			if (index > data1.length) {
+				values_positiona [v] = randomSpherePoint (starParticleRadiusMin + Math.random() * (starParticleRadiusMax - starParticleRadiusMin));
+				values_positionb [v] = randomSpherePoint (starParticleRadiusMin + Math.random() * (starParticleRadiusMax - starParticleRadiusMin));
+			} else {
+				var vector = new THREE.Vector3(data1[index], data1[index+2], data1[index+1]);
+				vector.multiplyScalar(2.0);
+				values_positiona[ v ] = vector;
+	
+				var vector = new THREE.Vector3(data2[index], data2[index+2], data2[index+1]);
+				//vector.multiplyScalar(170);
+				values_positionb[ v ] = vector;
+			}
+		}
+		console.log (vertices.length);
+		
 		_world.add (_starParticle);
 		// also update the particle system to
 		// sort the particles which enables
 		// the behaviour we want
 		_starParticle.sortParticles = true;
 		
+		
+		// --------------------------------------------------------------------
+		// 主要な星座の星のパーティクル
+		var zodiacStarParticleGeo = new THREE.Geometry ();
+		for ( var i = 0; i < Math.floor(StarPosition.length/3); ++i ) {
+			var index = i * 3;
+			var scale = 5.0;
+			zodiacStarParticleGeo.vertices.push( new THREE.Vector3 (-StarPosition[index] * scale, StarPosition[index+1] * scale, StarPosition[index+2] * scale));
+		}
+		
+		var zodiacStarParticleMat = new THREE.PointCloudMaterial ({
+			size:        1,
+			color:       0xBBBBFF,
+			blending:    THREE.AdditiveBlending,
+  			transparent: true,
+			depthTest:   false,
+			map:         starParticleTex		
+		});
+		
+		_zodiacStarParticle = new THREE.PointCloud (zodiacStarParticleGeo, zodiacStarParticleMat);
+		_world.add (_zodiacStarParticle);
+		
+		
+		// 主要な星座のグラフィックス用プレーン
+		
+		var zodiacGraphicsImagePathArray = [];
+		zodiacGraphicsImagePathArray.push ("./resources/images/Zodiac_Aries.png");  // 04
+		zodiacGraphicsImagePathArray.push ("./resources/images/Zodiac_Taurus.png"); // 05
+		zodiacGraphicsImagePathArray.push ("./resources/images/Zodiac_Gemini.png"); // 06
+		zodiacGraphicsImagePathArray.push ("./resources/images/Zodiac_Cancer.png"); // 07
+		zodiacGraphicsImagePathArray.push ("./resources/images/Zodiac_Leo.png"); // 08
+		zodiacGraphicsImagePathArray.push ("./resources/images/Zodiac_Virgo.png"); // 09
+		zodiacGraphicsImagePathArray.push ("./resources/images/Zodiac_Libra.png"); // 10
+		zodiacGraphicsImagePathArray.push ("./resources/images/Zodiac_Scorpio.png"); // 11
+		zodiacGraphicsImagePathArray.push ("./resources/images/Zodiac_Sagittarius.png"); // 12
+		zodiacGraphicsImagePathArray.push ("./resources/images/Zodiac_Capricorn.png"); // 01		
+		zodiacGraphicsImagePathArray.push ("./resources/images/Zodiac_Aquarius.png"); // 02
+		zodiacGraphicsImagePathArray.push ("./resources/images/Zodiac_Pisces.png"); // 03
+		
+		var zodiacGraphicsPlaneGeo = new THREE.PlaneGeometry (1, 1);
+		
+		for (var i = 0; i < zodiacGraphicsImagePathArray.length; i++) {
+			//console.log (zodiacGraphicsImagePathArray [i]);
+			var zodiacGraphicsPlaneMat = new THREE.MeshBasicMaterial ({
+				color: 0xFFFFFF,
+				blending: THREE.AdditiveBlending,
+  				//transparent: true,
+				map: THREE.ImageUtils.loadTexture(zodiacGraphicsImagePathArray [i])
+			});
+			var plane = new THREE.Mesh (zodiacGraphicsPlaneGeo, zodiacGraphicsPlaneMat);
+			
+			var ang = -(Math.PI*2.0/12.0)*i + Math.PI;
+			var pos = new THREE.Vector3 (
+				6.0 * Math.cos (ang),
+				Math.sin (i * 0.5 + 0.91) * 2.0,
+				6.0 * Math.sin (ang)
+			);
+			plane.position = pos;
+			plane.rotation.set (Math.PI*0.5, 0.0, Math.PI*0.5 + ang);
+			plane.scale.set (4,4,4);
+			
+			_world.add (plane);
+			_zoadicGraphicsPlanes.push (plane);	
+		}
+		
+		/*
 		// 背景の球体
-		var bgSphereGeo = new THREE.SphereGeometry (101, 24, 24);
+		var bgSphereGeo = new THREE.SphereGeometry (101, 12, 12);
 		// テクスチャ
 		var bgSphereTex = THREE.ImageUtils.loadTexture ('./resources/images/UVTextureChecker2048.png');
 		
-		var bgSphereMat = new THREE.MeshBasicMaterial ({
+		var bgSphereMat = new THREE.MeshBasicMaterial (
+			{
 				color     : 0xFFFFFF,
 				wireframe : true,
-				//map       : bgSphereTex,
+				map       : bgSphereTex,
 				side      : THREE.DoubleSide
 			});
 		_bgSphere = new THREE.Mesh (bgSphereGeo, bgSphereMat);
-		//_world.add(_bgSphere);
+		_world.add(_bgSphere);
+		*/
 		
 		// 水平線上の円状のライン
 		var outerHorizontalCircleLineMat = new THREE.LineBasicMaterial ({
@@ -311,7 +431,7 @@ $(function(){
 		// 座標軸
 		var axisHelper = new THREE.AxisHelper (1);
 		axisHelper.position.set (0,0,0);
-		axisHelper.scale.set(0.01, 0.01, 0.01);
+		//axisHelper.scale.set(0.01, 0.01, 0.01);
 		_world.add (axisHelper);
 	}
 	
@@ -336,24 +456,37 @@ $(function(){
 			
 		}
 		
-		var windowHalfX = window.innerWidth >> 1;
-		var windowHalfY = window.innerHeight >> 1;
+		if (_deviceType == "desktop") {
+			var windowHalfX = window.innerWidth >> 1;
+			var windowHalfY = window.innerHeight >> 1;
+	
+			_mouseX = ( Mouse.clientPosX - windowHalfX );
+			_mouseY = ( Mouse.clientPosY - windowHalfY );
+			
+			_toMouseX += (_mouseX-_toMouseX)/30;
+			_toMouseY += (_mouseY-_toMouseY)/30;
+	
+			_worldRotationX  = _toMouseY/1000;
+			_worldRotationY += _toMouseX/20000;
+		} else {
+			// rotationRateを使用
+			// _worldRotationX += DeviceMotion.rotationRateAlpha * Time.deltaTime * 0.01;
+			_worldRotationY -= DeviceMotion.rotationRateBeta * Time.deltaTime * 0.02;
 
-		_mouseX = ( Mouse.clientPosX - windowHalfX );
-		_mouseY = ( Mouse.clientPosY - windowHalfY );
+			var gy = (DeviceMotion.accelerationIncludeGravityZ > 0) ? DeviceMotion.accelerationIncludeGravityY + 10.0 : map(DeviceMotion.accelerationIncludeGravityY, -10.0, 0.0, 0.0, -10.0, false);
+			var distinationX = map(gy, -10.0, 10.0, -Math.PI * 0.5, Math.PI * 0.5, false);
+			_worldRotationX += ( distinationX - _worldRotationX ) * 0.1;
+		}
 		
-		_toMouseX += (_mouseX-_toMouseX)/30;
-		_toMouseY += (_mouseY-_toMouseY)/30;
-
-		_worldRotationX  = _toMouseY/1000;
-		_worldRotationY += _toMouseX/20000;
 		
 		_world.rotation.set (_worldRotationX, _worldRotationY, 0);
+		
+		TWEEN.update();
 		
 		_renderer.render (_scene, _camera); 
 		
 		// デバッグテキスト
-		//drawDebugText ();
+		drawDebugText ();
 		
 		Time.elapsedTime += Time.deltaTime;
 		Time.frameCount++;
@@ -409,6 +542,21 @@ $(function(){
 		}
 	}
 	
+	function moveCamera () {
+		
+		new TWEEN.Tween (_camera.position)
+				.to ({
+					x: 0,
+					y: 0,
+					z: -30
+				}, 5000)
+				.easing (TWEEN.Easing.Quadratic.InOut)
+				.start();
+				
+				
+		//_camera.position.z = Math.random ();
+	}
+	
 	function getRandomPointOnParticles (r) {
 		var angle = Math.random() * Math.PI * 2;
 		var u = Math.random() * 2 - 1;
@@ -432,6 +580,20 @@ $(function(){
 		return new THREE.Vector3 (x, y, z);
 	}
 
+	function map(value, inputMin, inputMax, outputMin, outputMax, clamp) {
+		var outVal = ((value - inputMin) / (inputMax - inputMin) * (outputMax - outputMin) + outputMin);
+		if( clamp ){
+			if(outputMax < outputMin){
+				if( outVal < outputMax )outVal = outputMax;
+				else if( outVal > outputMin )outVal = outputMin;
+			}else{
+				if( outVal > outputMax )outVal = outputMax;
+				else if( outVal < outputMin )outVal = outputMin;
+			}
+		}
+		return outVal;
+
+	}
 	
 	function onWindowResize() {
 		// アスペクト比を設定
@@ -486,8 +648,54 @@ $(function(){
 	}
 	window.addEventListener("devicemotion", deviceMotion);
 	
+	// ------- KeyEvent -------
+	document.onkeyup = function (e) {
+
+		if (!e) e = window.event;
 	
+		console.log ("keyCode : " + e.keyCode);
 	
+		switch (e.keyCode) {
+			case 65: // a
+				//tweenUp ();
+				//var tween = new TWEEN.Tween(_camera.position)
+				//.to({z:200}, 1000)
+				//.easing(TWEEN.Easing.Back.EaseOut);
+				//tween.start();
+				//_camera.position.set(0,0,-100);
+				
+				moveCamera ();
+				
+				break;
+			case 83: // s
+				
+				new TWEEN.Tween (uniforms.amplitude)
+				.to ({
+					value: 0
+				}, 5000)
+				.easing (TWEEN.Easing.Quadratic.InOut)
+				.start();
+				
+				break;
+			case 68: // d
+			
+			new TWEEN.Tween (uniforms.amplitude)
+				.to ({
+					value: 1
+				}, 5000)
+				.easing (TWEEN.Easing.Quadratic.InOut)
+				.start();
+				
+				break;
+			case 70: // f
+				
+				break;
+			default:
+	
+				break;
+		}
+	}
+		
 	// ------- ------------------------------------------
 	function drawDebugText () {
 		$('#debug_text').html (
