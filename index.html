@@ -17,6 +17,7 @@
 <script type="text/javascript" src="js/data/data1.js"></script>
 <script type="text/javascript" src="js/data/data2.js"></script>
 <script type="text/javascript" src="js/data/StarPosition.js"></script>
+<script type="text/javascript" src="js/data/LinePosition.js"></script>
 
 <script type="text/javascript" src="js/main.js"></script>
 
@@ -157,9 +158,17 @@ $(function(){
 	
 	// objects
 	var _world;
+	
 	var _bgSphere;
+	
 	var _starParticle;
+	
 	var _zodiacStarParticle;
+	
+	var _zodiacStarLineMesh;
+	var _zodiacStarLinePositions;
+	var _zodiacStarLineColors;
+	var _zodiacStarLineConnectionRate = 0;
 	
 	var _zoadicGraphicsPlanes = [];
 	
@@ -224,19 +233,11 @@ $(function(){
 		_world = new THREE.Object3D();
 		_scene.add(_world);
 		
-		
+		// --------------------------------------------------------------------
 		// 星パーティクル
 		var starParticleRadiusMax = 80.0;
 		var starParticleRadiusMin = 20.0;
 		var starParticleGeo = new THREE.Geometry ();
-		
-		/*
-		for ( var i = 0; i < 3000; ++i ) {
-			//var vector = getRandomPointOnParticles(starParticleRadiusMin + Math.random() * starParticleRadiusMax - starParticleRadiusMin);
-			var vector = randomSpherePoint (starParticleRadiusMin + Math.random() * (starParticleRadiusMax - starParticleRadiusMin));
-			starParticleGeo.vertices.push( vector );
-		}
-		*/
 		
 		for ( var i = 0; i < Math.floor(data1.length/3); ++i ) {
 			var vector = randomSpherePoint (starParticleRadiusMin + Math.random() * (starParticleRadiusMax - starParticleRadiusMin));
@@ -273,12 +274,12 @@ $(function(){
 		});
 		
 		var starParticleMat = new THREE.PointCloudMaterial ({
-			size: 2,
-			color: 0xFFFFFF,
-			blending: THREE.AdditiveBlending,
+			size:        2,
+			color:       0xFFFFFF,
+			blending:    THREE.AdditiveBlending,
   			transparent: true,
-			depthTest: false,
-			map: starParticleTex		
+			depthTest:   false,
+			map:         starParticleTex		
 		});
 		
 		_starParticle = new THREE.PointCloud (starParticleGeo, starParticleShaderMat);
@@ -317,12 +318,8 @@ $(function(){
 				values_positionb[ v ] = vector;
 			}
 		}
-		console.log (vertices.length);
 		
 		_world.add (_starParticle);
-		// also update the particle system to
-		// sort the particles which enables
-		// the behaviour we want
 		_starParticle.sortParticles = true;
 		
 		
@@ -348,8 +345,8 @@ $(function(){
 		_world.add (_zodiacStarParticle);
 		
 		
+		// --------------------------------------------------------------------
 		// 主要な星座のグラフィックス用プレーン
-		
 		var zodiacGraphicsImagePathArray = [];
 		zodiacGraphicsImagePathArray.push ("./resources/images/Zodiac_Aries.png");  // 04
 		zodiacGraphicsImagePathArray.push ("./resources/images/Zodiac_Taurus.png"); // 05
@@ -364,32 +361,84 @@ $(function(){
 		zodiacGraphicsImagePathArray.push ("./resources/images/Zodiac_Aquarius.png"); // 02
 		zodiacGraphicsImagePathArray.push ("./resources/images/Zodiac_Pisces.png"); // 03
 		
-		var zodiacGraphicsPlaneGeo = new THREE.PlaneGeometry (1, 1);
+		var zodiacGraphicsPlaneGeo = new THREE.PlaneBufferGeometry (1, 1);
 		
 		for (var i = 0; i < zodiacGraphicsImagePathArray.length; i++) {
 			//console.log (zodiacGraphicsImagePathArray [i]);
+			var zoadicGraphicsPlaneObj = new THREE.Object3D();
+			
 			var zodiacGraphicsPlaneMat = new THREE.MeshBasicMaterial ({
-				color: 0xFFFFFF,
-				blending: THREE.AdditiveBlending,
-  				//transparent: true,
-				map: THREE.ImageUtils.loadTexture(zodiacGraphicsImagePathArray [i])
+				color:       0xFFFFFF,
+				blending:    THREE.AdditiveBlending,
+  				transparent: true,
+				side:        THREE.DoubleSide,
+				depthTest:   false,
+				map:         THREE.ImageUtils.loadTexture(zodiacGraphicsImagePathArray [i])
 			});
+			
 			var plane = new THREE.Mesh (zodiacGraphicsPlaneGeo, zodiacGraphicsPlaneMat);
 			
 			var ang = -(Math.PI*2.0/12.0)*i + Math.PI;
 			var pos = new THREE.Vector3 (
 				6.0 * Math.cos (ang),
-				Math.sin (i * 0.5 + 0.91) * 2.0,
+				Math.sin (i * 0.5 + 0.91) * 2.8,
 				6.0 * Math.sin (ang)
 			);
-			plane.position = pos;
-			plane.rotation.set (Math.PI*0.5, 0.0, Math.PI*0.5 + ang);
-			plane.scale.set (4,4,4);
 			
-			_world.add (plane);
+			//var rot = Math.asin ((pos.y - _camera.position.y) / (pos.distanceToSquared (_camera.position)));
+			var rot = Math.sin (ang) * 0.5;
+			console.log (rot * 180.0/Math.PI);
+			plane.rotation.set (rot, 0.0, 0.0);
+			
+			zoadicGraphicsPlaneObj.position.set (pos.x, pos.y, pos.z);
+			zoadicGraphicsPlaneObj.rotation.set (Math.PI * 0.0 , -Math.PI * 0.5 - ang, 0.0);
+			zoadicGraphicsPlaneObj.scale.set (4,4,4);
+			
+			zoadicGraphicsPlaneObj.add (plane);
+			
+			_world.add (zoadicGraphicsPlaneObj);
+			
 			_zoadicGraphicsPlanes.push (plane);	
 		}
 		
+		// --------------------------------------------------------------------
+		// 主要な星座の星を結ぶライン
+		
+		// ジオメトリ
+		var starLineGeo = new THREE.BufferGeometry ();
+		
+		var segments = Math.floor(LinePosition.length/6);
+		
+		_zodiacStarLinePositions = new Float32Array (segments * 3 * 2);
+		_zodiacStarLineColors    = new Float32Array (segments * 3 * 2);
+		
+		starLineGeo.addAttribute ('position', new THREE.DynamicBufferAttribute (_zodiacStarLinePositions, 3));
+		starLineGeo.addAttribute ('color',    new THREE.DynamicBufferAttribute (_zodiacStarLineColors,    3));
+		
+		starLineGeo.computeBoundingSphere ();
+		
+		starLineGeo.drawcalls.push ({
+			star:  0,
+			count: 0,
+			index: 0
+		});
+		
+		// マテリアル
+		var starLineMat = new THREE.LineBasicMaterial({
+			vertexColors: THREE.VertexColors,
+			blending:     THREE.AdditiveBlending,
+			linewidth:    2.0,
+			color:        0xAADDFF,
+			transparent:  true
+		});
+		
+		_zodiacStarLineMesh = new THREE.Line (starLineGeo, starLineMat, THREE.LinePieces);
+		_world.add (_zodiacStarLineMesh);
+		
+		_zodiacStarLineConnectionRate = 0;
+		updateZodiacStarLinePosition (_zodiacStarLineConnectionRate);
+		
+		// --------------------------------------------------------------------
 		/*
 		// 背景の球体
 		var bgSphereGeo = new THREE.SphereGeometry (101, 12, 12);
@@ -408,6 +457,7 @@ $(function(){
 		*/
 		
 		// 水平線上の円状のライン
+		/*
 		var outerHorizontalCircleLineMat = new THREE.LineBasicMaterial ({
 			color: 0xFFFFFF
 		});
@@ -427,6 +477,7 @@ $(function(){
 	
 		var outerHorizontalCircleLine = new THREE.Line (outerHorizontalCircleLineGeo, outerHorizontalCircleLineMat);
 		_world.add (outerHorizontalCircleLine);
+		*/
 		
 		// 座標軸
 		var axisHelper = new THREE.AxisHelper (1);
@@ -544,17 +595,41 @@ $(function(){
 	
 	function moveCamera () {
 		
-		new TWEEN.Tween (_camera.position)
-				.to ({
-					x: 0,
-					y: 0,
-					z: -30
-				}, 5000)
-				.easing (TWEEN.Easing.Quadratic.InOut)
-				.start();
-				
-				
-		//_camera.position.z = Math.random ();
+	}
+	
+	// -----------------------------------------------------------------------------
+	/**
+	 *  主要な星座の星を結ぶラインの位置を更新
+	 *  @param rate : ラインが結ばれている率 (0.0:min ~ 1.0:max)
+	 */
+	function updateZodiacStarLinePosition (rate_) {
+		var vartexPos    = 0;
+		var colorpos     = 0;
+		var numConnected = 0;
+		var lineScale    = 5.0;
+		for (var i = 0; i <  Math.floor(LinePosition.length/6); i++) {
+			_zodiacStarLinePositions [vartexPos++] = LinePosition [i * 6 + 0] * lineScale * -1.0;
+			_zodiacStarLinePositions [vartexPos++] = LinePosition [i * 6 + 1] * lineScale;
+			_zodiacStarLinePositions [vartexPos++] = LinePosition [i * 6 + 2] * lineScale;
+			
+			_zodiacStarLinePositions [vartexPos++] = rate_ * LinePosition [i * 6 + 3] * lineScale * -1.0 + (1.0 - rate_) * LinePosition [i * 6 + 0] * lineScale * -1.0;
+			_zodiacStarLinePositions [vartexPos++] = rate_ * LinePosition [i * 6 + 4] * lineScale        + (1.0 - rate_) * LinePosition [i * 6 + 1] * lineScale;
+			_zodiacStarLinePositions [vartexPos++] = rate_ * LinePosition [i * 6 + 5] * lineScale        + (1.0 - rate_) * LinePosition [i * 6 + 2] * lineScale;
+			
+			_zodiacStarLineColors [colorpos++] = 1.0;
+			_zodiacStarLineColors [colorpos++] = 1.0;
+			_zodiacStarLineColors [colorpos++] = 1.0;
+
+			_zodiacStarLineColors [colorpos++] = 1.0;
+			_zodiacStarLineColors [colorpos++] = 1.0;
+			_zodiacStarLineColors [colorpos++] = 1.0;
+			
+			numConnected++;
+		}
+		
+		_zodiacStarLineMesh.geometry.drawcalls[ 0 ].count            = numConnected * 2;
+		_zodiacStarLineMesh.geometry.attributes.position.needsUpdate = true;
+		_zodiacStarLineMesh.geometry.attributes.color.needsUpdate    = true;
 	}
 	
 	function getRandomPointOnParticles (r) {
@@ -656,18 +731,49 @@ $(function(){
 		console.log ("keyCode : " + e.keyCode);
 	
 		switch (e.keyCode) {
+			
+			// ---------------------------------------------------------
 			case 65: // a
-				//tweenUp ();
-				//var tween = new TWEEN.Tween(_camera.position)
-				//.to({z:200}, 1000)
-				//.easing(TWEEN.Easing.Back.EaseOut);
-				//tween.start();
-				//_camera.position.set(0,0,-100);
 				
-				moveCamera ();
+				new TWEEN.Tween (_camera.position)
+				.to ({
+					x: 0,
+					y: 0,
+					z: -30
+				}, 5000)
+				.easing (TWEEN.Easing.Quadratic.InOut)
+				.start();
 				
 				break;
+			
+			// ---------------------------------------------------------
 			case 83: // s
+				
+				new TWEEN.Tween (_camera.position)
+				.to ({
+					x: 0,
+					y: 0,
+					z: -2.5
+				}, 5000)
+				.easing (TWEEN.Easing.Quadratic.InOut)
+				.start();
+				
+				break;
+			
+			// ---------------------------------------------------------
+			case 68: // d
+			
+			
+				
+				break;
+			
+			// ---------------------------------------------------------
+			case 70: // f
+				
+				break;
+			
+			// ---------------------------------------------------------
+			case 49: // 1
 				
 				new TWEEN.Tween (uniforms.amplitude)
 				.to ({
@@ -677,9 +783,11 @@ $(function(){
 				.start();
 				
 				break;
-			case 68: // d
 			
-			new TWEEN.Tween (uniforms.amplitude)
+			// ---------------------------------------------------------
+			case 50: // 2
+			
+				new TWEEN.Tween (uniforms.amplitude)
 				.to ({
 					value: 1
 				}, 5000)
@@ -687,9 +795,38 @@ $(function(){
 				.start();
 				
 				break;
-			case 70: // f
+			
+			// ---------------------------------------------------------
+			case 51: // 3
+				
+				new TWEEN.Tween ({value: _zodiacStarLineConnectionRate})
+				.to ({value: 1.0}, 2000)
+				.easing (TWEEN.Easing.Linear.None)
+				.onUpdate (function () {
+					_zodiacStarLineConnectionRate = this.value;
+					console.log (_zodiacStarLineConnectionRate);
+					updateZodiacStarLinePosition (_zodiacStarLineConnectionRate); // ラインの更新
+				})
+				.start ();
 				
 				break;
+			
+			// ---------------------------------------------------------
+			case 52: // 4
+			
+				new TWEEN.Tween ({value: _zodiacStarLineConnectionRate})
+				.to ({value: 0.0}, 2000)
+				.easing (TWEEN.Easing.Linear.None)
+				.onUpdate (function () {
+					_zodiacStarLineConnectionRate = this.value;
+					console.log (_zodiacStarLineConnectionRate);
+					updateZodiacStarLinePosition (_zodiacStarLineConnectionRate); // ラインの更新
+				})
+				.start ();
+				
+				break;
+				
+			// ---------------------------------------------------------
 			default:
 	
 				break;
