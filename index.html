@@ -50,12 +50,12 @@ void main() {
 
 	//vColor = customColor;
 
-	//vec3 pos = position; 
+	vec3 pos = vec3(0,0,0); 
 
 	// small noise  movement
-	//pos.x += cos(time + (position.y/8.0))*150.0; 
-	//pos.z += sin(time + (position.x/8.0))*150.0; 
-	//pos.y += sin(time + (position.z/4.0))*140.0; 
+	//pos.x = cos(0 + (position.y/8.0))*1.0; 
+	//pos.z = sin(0 + (position.x/8.0))*1.0; 
+	//pos.y = sin(0 + (position.z/4.0))*1.0; 
 
 	// morph
 	vec3 morphed = vec3( 0.0, 0.0, 0.0 );
@@ -170,7 +170,18 @@ $(function(){
 	var _zodiacStarLineColors;
 	var _zodiacStarLineConnectionRate = 0;
 	
-	var _zoadicGraphicsPlanes = [];
+	// 主要な星座のグラフィックスを表示するプレーン
+	var _zodiacGraphicsPlanes = [];
+	
+	var _zodiacIndex;
+	
+	
+	// 
+	var State = {
+		isEnabledStarLine: false,
+		isEnabledZodiacGraphics: false,
+		
+	}
 	
 	// ----------------------------------------------
 	// functions
@@ -186,7 +197,7 @@ $(function(){
 		_renderer = new THREE.WebGLRenderer(
 		{
 			precision:             'highp',
-			alpha:                 true,
+			alpha:                 false,
 			premultipliedAlpha:    true,
 			antialias:             false,
 			stencil:               true,
@@ -197,7 +208,7 @@ $(function(){
 		// canvas要素のサイズを指定
 		_renderer.setSize(window.innerWidth, window.innerHeight);
 		// 背景色を指定
-		_renderer.setClearColor(0x000000, 0.0);
+		_renderer.setClearColor(0x001122, 1.0);
 		
 		$(_renderer.domElement).attr('id', 'main_webgl_canvas');
 		
@@ -220,7 +231,7 @@ $(function(){
 	
 	function init_camera () {
 		// カメラを作成
-		_camera = new THREE.PerspectiveCamera( 75, window.innerWidth/window.innerHeight, 0.1, 1000 );
+		_camera = new THREE.PerspectiveCamera( 60, window.innerWidth/window.innerHeight, 0.1, 1000 );
 		// カメラの位置を指定
 		_camera.position.set(0.0, 0.0, -2.5);
 		// カメラの向きを指定
@@ -373,6 +384,7 @@ $(function(){
   				transparent: true,
 				side:        THREE.DoubleSide,
 				depthTest:   false,
+				opacity:     0.0,
 				map:         THREE.ImageUtils.loadTexture(zodiacGraphicsImagePathArray [i])
 			});
 			
@@ -398,7 +410,11 @@ $(function(){
 			
 			_world.add (zoadicGraphicsPlaneObj);
 			
-			_zoadicGraphicsPlanes.push (plane);	
+			_zodiacGraphicsPlanes.push ({
+				mesh:      plane,
+				transform: zoadicGraphicsPlaneObj,
+				isVisible: false
+			});	
 		}
 		
 		// --------------------------------------------------------------------
@@ -529,9 +545,15 @@ $(function(){
 			_worldRotationX += ( distinationX - _worldRotationX ) * 0.1;
 		}
 		
-		
 		_world.rotation.set (_worldRotationX, _worldRotationY, 0);
 		
+		// 星座のグラフィックスを表示
+		if (State.isEnabledZodiacGraphics) {
+			checkIsFitLightOfSightToZodiacGraphicsPlane ();
+		}
+		
+		
+		// Tweenの更新
 		TWEEN.update();
 		
 		_renderer.render (_scene, _camera); 
@@ -593,8 +615,50 @@ $(function(){
 		}
 	}
 	
-	function moveCamera () {
+	/**
+	 *	演出のスケジュールを開始 (窓から)
+	 *
+	 */
+	function startSchedule () {
 		
+		// if (スライドされたら)
+		
+		// 窓を開ける
+		
+		// 窓の外にでる(窓をカメラの裏に移動)
+		
+		// ラインを表示
+		
+		
+		// 星座のグラフィックスを表示
+		
+		// if (星座のグラフィックスをすべて表示したら)
+		
+		// コピーを表示
+		
+		// 星座のグラフィックスをフェードアウト
+		
+		// 星を移動
+		
+		// 主要な星を移動
+		
+		// ラインを消す(フェードアウト)
+		
+		// リンクを表示
+	}
+	
+	function showStarLine () {
+		new TWEEN.Tween ({value: _zodiacStarLineConnectionRate})
+		.to ({value: 1.0}, 2000)
+		.easing (TWEEN.Easing.Quadratic.InOut)
+		.onUpdate (function () {
+			_zodiacStarLineConnectionRate = this.value;
+			updateZodiacStarLinePosition (_zodiacStarLineConnectionRate); // ラインの更新
+		})
+		.onComplete (function () {
+			State.isEnabledZodiacGraphics = true;
+		})
+		.start ();	
 	}
 	
 	// -----------------------------------------------------------------------------
@@ -630,6 +694,33 @@ $(function(){
 		_zodiacStarLineMesh.geometry.drawcalls[ 0 ].count            = numConnected * 2;
 		_zodiacStarLineMesh.geometry.attributes.position.needsUpdate = true;
 		_zodiacStarLineMesh.geometry.attributes.color.needsUpdate    = true;
+	}
+	
+	// -----------------------------------------------------------------------------
+	/**
+	 *  星座のグラフィックスのプレーンが視点の先にあるかをチェックする
+	 */
+	function checkIsFitLightOfSightToZodiacGraphicsPlane () {
+		var angle = roundAngle(_worldRotationY);
+		
+		var range = (Math.PI * 2.0) / 12.0;
+		for (var i = 0; i < 12; i++) {
+			if (i * range < angle && (i+1) * range >= angle) {
+				var index = Math.abs(11-(i+21)%12);
+				_zodiacIndex = index;
+				if (_zodiacGraphicsPlanes [index].isVisible == false) {
+					_zodiacGraphicsPlanes [index].isVisible = true;
+					new TWEEN.Tween (_zodiacGraphicsPlanes [index].mesh.material)
+					.to ({opacity: 0.5}, 1000)
+					.easing (TWEEN.Easing.Linear.None)
+					.start ();
+				}
+			}
+		}
+	}
+	
+	function roundAngle (angle_) {
+		return angle_ < 0.0 ? Math.PI * 2.0 + angle_ % (Math.PI * 2.0) : angle_ % (Math.PI * 2.0);
 	}
 	
 	function getRandomPointOnParticles (r) {
@@ -702,6 +793,26 @@ $(function(){
         Mouse.offsetY    = event.offsetY;
     }
    	document.onmousemove=(document.all) ? getMouseXY_ie : getMouseXY;
+	
+	// ------- Touch Event -------
+	
+	function touchStartHandler (e) {
+		
+	}
+	
+	function touchMoveHandler (e) {
+		
+	}
+	
+	function touchEndHandler (e) {
+		
+		showStarLine ();
+		
+	}
+	
+	document.getElementById('main_frame').addEventListener ("touchstart", touchStartHandler, false);
+	document.getElementById('main_frame').addEventListener ("touchmove",  touchMoveHandler, false);
+	document.getElementById('main_frame').addEventListener ("touchend",   touchEndHandler, false);
 	
 	// ------- Device Motion -------
 	function deviceMotion (e)
@@ -827,6 +938,54 @@ $(function(){
 				break;
 				
 			// ---------------------------------------------------------
+			case 53: // 5
+				
+				showStarLine ();
+				
+				break;
+				
+			case 81: // q
+			
+				// すべての星座のグラフィックスを表示
+				for (var i = 0; i < _zodiacGraphicsPlanes.length; i++) {
+					if (_zodiacGraphicsPlanes [i].isVisible == false) {
+						_zodiacGraphicsPlanes [i].isVisible = true;
+						new TWEEN.Tween (_zodiacGraphicsPlanes [i].mesh.material)
+						.to ({opacity: 0.5}, 1000)
+						.easing (TWEEN.Easing.Linear.None)
+						.start ();
+					}
+				}
+				
+				break;
+				
+			case 87: // w
+				
+				// すべての星座のグラフィックスを非表示に
+				for (var i = 0; i < _zodiacGraphicsPlanes.length; i++) {
+					if (_zodiacGraphicsPlanes [i].isVisible == true) {
+						_zodiacGraphicsPlanes [i].isVisible = false;
+						new TWEEN.Tween (_zodiacGraphicsPlanes [i].mesh.material)
+						.to ({opacity: 0.0}, 1000)
+						.easing (TWEEN.Easing.Linear.None)
+						.start ();
+					}
+				}
+				break;
+			
+			case 69: // e
+			
+				break;
+				
+			case 82: // r
+			
+				break;
+				
+			case 84: // t
+			
+				break;
+				
+			// ---------------------------------------------------------
 			default:
 	
 				break;
@@ -847,7 +1006,21 @@ $(function(){
 			"_worldRotationY     : " + _worldRotationY     + "<br/>" +
 			"deviceType          : " + _deviceType         + "<br/>" +
 			"deviceOS            : " + _deviceOS           + "<br/>" +
-			"deviceOrientation   : " + _deviceOrientation
+			"deviceOrientation   : " + _deviceOrientation  + "<br/>" +
+			"_zodiacGraphicsPlanes [0] : " + _zodiacGraphicsPlanes [0].isVisible + "<br/>" +
+			"_zodiacGraphicsPlanes [1] : " + _zodiacGraphicsPlanes [1].isVisible + "<br/>" + 
+			"_zodiacGraphicsPlanes [2] : " + _zodiacGraphicsPlanes [2].isVisible + "<br/>" + 
+			"_zodiacGraphicsPlanes [3] : " + _zodiacGraphicsPlanes [3].isVisible + "<br/>" + 
+			"_zodiacGraphicsPlanes [4] : " + _zodiacGraphicsPlanes [4].isVisible + "<br/>" + 
+			"_zodiacGraphicsPlanes [5] : " + _zodiacGraphicsPlanes [5].isVisible + "<br/>" + 
+			"_zodiacGraphicsPlanes [6] : " + _zodiacGraphicsPlanes [6].isVisible + "<br/>" + 
+			"_zodiacGraphicsPlanes [7] : " + _zodiacGraphicsPlanes [7].isVisible + "<br/>" + 
+			"_zodiacGraphicsPlanes [8] : " + _zodiacGraphicsPlanes [8].isVisible + "<br/>" +
+			"_zodiacGraphicsPlanes [9] : " + _zodiacGraphicsPlanes [9].isVisible + "<br/>" + 
+			"_zodiacGraphicsPlanes [10] : " + _zodiacGraphicsPlanes [10].isVisible + "<br/>" + 
+			"_zodiacGraphicsPlanes [11] : " + _zodiacGraphicsPlanes [11].isVisible + "<br/>" +
+			"_worldRotationY%Math.PI : " + roundAngle (_worldRotationY) + "<br/>" +
+			"_zodiacIndex : " + _zodiacIndex
 		);
 	}
 
