@@ -25,7 +25,6 @@
 
 <body>
 <!-- elements ------------------------------------------------------------------- -->
-
 <!-- main frame -->
 <div id="main_frame"></div>
 <div id="debug_text"></div>
@@ -182,6 +181,9 @@ $(function(){
 		isEnabledZodiacGraphics: false,
 		
 	}
+
+	// バナーの縦幅
+	var BANNER_HEIGHT = 70;
 	
 	// ----------------------------------------------
 	// functions
@@ -211,6 +213,8 @@ $(function(){
 		_renderer.setClearColor(0x001122, 1.0);
 		
 		$(_renderer.domElement).attr('id', 'main_webgl_canvas');
+		$("#main_frame").height(BANNER_HEIGHT).css('overflow', 'hidden').css('position', 'absolute').css('bottom', '0px');
+
 		
 		// レンダラーをbodyに追加
 		$('#main_frame').append($(_renderer.domElement));
@@ -223,7 +227,7 @@ $(function(){
 		_stats.domElement.style.position = 'fixed';
 		_stats.domElement.style.right    = '5px';
 		_stats.domElement.style.top      = '5px';
-		document.body.appendChild(_stats.domElement);	
+		document.body.appendChild(_stats.domElement);
 		
 		// ウィンドウサイズが変更された時のイベントを取得
 		window.addEventListener ('resize', onWindowResize, false);
@@ -244,6 +248,28 @@ $(function(){
 		_world = new THREE.Object3D();
 		_scene.add(_world);
 		
+		// --------------------------------------------------------------------
+		// 窓
+		var windowGeo = new THREE.PlaneBufferGeometry (1, 1);
+		var windowPlaneObj = new THREE.Object3D();
+		var windowMat = new THREE.MeshBasicMaterial ({
+			color:       0xFFFFFF,
+			blending:    THREE.NoBlending,
+			transparent: true,	
+			side:        THREE.DoubleSide,
+			depthTest:   true,
+			// opacity:     1.0,
+			map:         THREE.ImageUtils.loadTexture("./resources/images/window.jpg", undefined, function(texture){
+				var aspect = texture.image.width / texture.image.height;
+				windowPlaneObj.scale.set(2, 2/aspect, 1);
+			})
+		});
+		var plane = new THREE.Mesh (windowGeo, windowMat);
+		// windowPlaneObj.position.set (0, 0, -2.0);
+		// windowPlaneObj.scale.set(2, 2, 2);
+		windowPlaneObj.add (plane);
+		_scene.add(windowPlaneObj);
+
 		// --------------------------------------------------------------------
 		// 星パーティクル
 		var starParticleRadiusMax = 80.0;
@@ -559,7 +585,7 @@ $(function(){
 		_renderer.render (_scene, _camera); 
 		
 		// デバッグテキスト
-		drawDebugText ();
+		// drawDebugText ();
 		
 		Time.elapsedTime += Time.deltaTime;
 		Time.frameCount++;
@@ -795,19 +821,43 @@ $(function(){
    	document.onmousemove=(document.all) ? getMouseXY_ie : getMouseXY;
 	
 	// ------- Touch Event -------
-	
+	var startY = 0;
+	var startTime = 0;
+	var moveY = 0;
+	var endTime = 0;
+	var isExtend = false;
+
 	function touchStartHandler (e) {
-		
+		startY = e.targetTouches[0].clientY;
+		moveY = startY;
+		startTime = Time.elapsedTime;
 	}
 	
 	function touchMoveHandler (e) {
-		
+		moveY = e.targetTouches[0].clientY;
+		if (!isExtend)
+			scaleBanner(window.innerHeight - moveY - startY + window.innerHeight, 0);
 	}
 	
 	function touchEndHandler (e) {
 		
-		showStarLine ();
-		
+		// showStarLine ();
+
+		if (!isExtend)
+		{
+			var speed = (startY - moveY) / (Time.elapsedTime - startTime);
+			console.log(speed);
+			if (speed > 400)
+			{
+				scaleBanner(window.innerHeight, 400000 / speed);
+				isExtend = true;
+			}
+			else
+				scaleBanner(BANNER_HEIGHT, 500);
+		}
+		startY = 0;
+		startTime = 0;
+		moveY = 0;
 	}
 	
 	document.getElementById('main_frame').addEventListener ("touchstart", touchStartHandler, false);
@@ -1022,6 +1072,27 @@ $(function(){
 			"_worldRotationY%Math.PI : " + roundAngle (_worldRotationY) + "<br/>" +
 			"_zodiacIndex : " + _zodiacIndex
 		);
+	}
+
+	function scaleBanner (bannerHeight, duration) {
+		var target = document.getElementById("main_frame");
+		var size = {
+			height : target.clientHeight
+		}
+		var target = target;
+		var tween = new TWEEN.Tween(size)
+		.to({
+			height : bannerHeight
+		}, duration)
+		.easing(TWEEN.Easing.Quadratic.Out)
+		.onUpdate(function() {
+			target.style.height = size.height + 'px';
+		});
+		tween.start();
+	}
+
+	function shorten() {
+
 	}
 
 });
